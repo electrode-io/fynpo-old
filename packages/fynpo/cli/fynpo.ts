@@ -47,11 +47,11 @@ const execBootstrap = parsed => {
     });
 };
 
-export const execLocal = parsed => {
+const execLocal = parsed => {
   return makeBootstrap(parsed).updateToLocal();
 };
 
-export const execPrepare = parsed => {
+const execPrepare = parsed => {
   const opts = Object.assign({ cwd: process.cwd() }, parsed.opts);
 
   return new Prepare(opts, makePkgDeps(readPackages(opts.cwd), parsed.opts.ignore || [], [])).exec();
