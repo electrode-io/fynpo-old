@@ -205,7 +205,8 @@ ${data.error.output.stderr}
 
     if (!this._fyn) {
       this._fyn = require.resolve("fyn");
-      const fynPkgJson = await import("fyn/package.json");
+      /* eslint-disable @typescript-eslint/no-var-requires */
+      const fynPkgJson = require("fyn/package.json");
 
       const globalFynInfo = await locateGlobalFyn();
       if (globalFynInfo.dir) {

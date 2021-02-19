@@ -39,7 +39,8 @@ export const locateGlobalFyn = async (globalNmDir = null) => {
 
   try {
     const dir = Path.join(globalNmDir, "fyn");
-    const pkgJson = await import(Path.join(dir, "package.json"));
+    /* eslint-disable @typescript-eslint/no-var-requires */
+    const pkgJson = require(Path.join(dir, "package.json"));
     return {
       dir,
       pkgJson
