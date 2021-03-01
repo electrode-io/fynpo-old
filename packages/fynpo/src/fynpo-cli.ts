@@ -4,6 +4,7 @@ import Path from "path";
 import NixClap from "nix-clap";
 import Bootstrap from "./bootstrap";
 import Prepare from "./prepare";
+import Changelog from "./update-changelog";
 import makePkgDeps from "./make-pkg-deps";
 import readPackages from "./read-packages";
 import logger from "./logger";
@@ -55,6 +56,15 @@ const execPrepare = (parsed) => {
   const opts = Object.assign({ cwd: process.cwd() }, parsed.opts);
 
   return new Prepare(
+    opts,
+    makePkgDeps(readPackages(opts.cwd), parsed.opts.ignore || [], [])
+  ).exec();
+};
+
+const execChangelog = (parsed) => {
+  const opts = Object.assign({ cwd: process.cwd() }, parsed.opts);
+
+  return new Changelog(
     opts,
     makePkgDeps(readPackages(opts.cwd), parsed.opts.ignore || [], [])
   ).exec();
@@ -141,6 +151,11 @@ const nixClap = new NixClap({
       desc: "Prepare packages versions for publish",
       exec: execPrepare,
     },
+    changelog: {
+      alias: "c",
+      desc: "Update changelog",
+      exec: execChangelog,
+    }
   }
 );
 
