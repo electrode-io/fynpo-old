@@ -22,6 +22,7 @@ xsh.Promise = Promise;
 xsh.envPath.addToFront(Path.join(__dirname, "../node_modules/.bin"));
 import _ from "lodash";
 import * as utils from "./utils";
+import logger from "./logger";
 
 const changeLogFile = Path.resolve("CHANGELOG.md");
 const changeLog = Fs.readFileSync(changeLogFile).toString();
@@ -57,10 +58,10 @@ class Changelog {
   };
 
   getLatestTag = () => {
-    return this._sh(`git describe --abbrev=0 | grep "gtp-publish-*"`).then((output) => {
+    return this._sh(`git describe --abbrev=0 --match fynpo-rel-*`).then((output) => {
       const tagInfo = output.stdout.split("\n").filter((x) => x.trim().length > 0);
-      assert(tagInfo[0], "Can't find latest publish tag");
-      console.log(`Last publish tag: ${tagInfo[0]}`);
+      assert(tagInfo[0], "Can't find latest release tag");
+      logger.info(`Last release tag: ${tagInfo[0]}`);
       return tagInfo[0];
     });
   };
@@ -82,7 +83,7 @@ class Changelog {
       });
 
       if (pkgNames.length > 0) {
-        console.log(`Since tag '${latestTag}', these packages changed: ${pkgNames.join(" ")}`);
+        logger.info(`Since tag '${latestTag}', these packages changed: ${pkgNames.join(" ")}`);
         pkgNames.forEach((name) => {
           const pkgData = this._data.packages[name] || {};
           if (pkgData.dependents && pkgData.dependents.length > 0) {
@@ -90,7 +91,7 @@ class Changelog {
           }
         });
       } else {
-        console.log(`no packages changed since tag '${latestTag}'`);
+        logger.warn(`no packages changed since tag '${latestTag}'`);
         process.exit(1);
       }
 
@@ -120,7 +121,7 @@ class Changelog {
       })
       .then((commits) => {
         if (changeLog.indexOf(commits.ids[0]) >= 0) {
-          console.log("change log already contain a commit from new commits");
+          logger.error("change log already contain a commit from new commits");
           process.exit(1);
         }
         return commits;
@@ -348,17 +349,17 @@ class Changelog {
   };
 
   commitChangeLogFile = (gitClean) => {
-    console.log("Change log updated.");
+    logger.info("Change log updated.");
     if (!gitClean) {
-      console.log("Your git branch is not clean, skip committing changelog file");
+      logger.warn("Your git branch is not clean, skip committing changelog file");
       return;
     }
     return this._sh(`git add ${changeLogFile} && git commit -m "Update changelog"`)
       .then(() => {
-        console.log("Changelog committed");
+        logger.info("Changelog committed");
       })
       .catch((e) => {
-        console.log("Commit changelog failed", e);
+        logger.error("Commit changelog failed", e);
       });
   };
 
