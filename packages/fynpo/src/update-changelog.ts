@@ -27,7 +27,7 @@ import logger from "./logger";
 const changeLogFile = Path.resolve("CHANGELOG.md");
 const changeLog = Fs.readFileSync(changeLogFile).toString();
 
-class Changelog {
+export default class Changelog {
   _cwd;
   _fynpoRc;
   _data;
@@ -374,5 +374,3 @@ class Changelog {
       .then(this.commitChangeLogFile);
   }
 }
-
-export = Changelog;

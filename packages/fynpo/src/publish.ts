@@ -6,7 +6,7 @@ import Promise from "bluebird";
 import logger from "./logger";
 import * as utils from "./utils";
 
-class Publish {
+export default class Publish {
   _cwd;
   _distTag;
   _dryRun;
@@ -143,5 +143,3 @@ class Publish {
       .then(this.addReleaseTag);
   }
 }
-
-export = Publish;

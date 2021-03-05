@@ -3,7 +3,7 @@ import Promise from "bluebird";
 import logger from "./logger";
 import * as utils from "./utils";
 
-class Run {
+export default class Run {
   _cwd;
   _script;
   _packages;
@@ -53,5 +53,3 @@ class Run {
     });
   }
 }
-
-export = Run;
