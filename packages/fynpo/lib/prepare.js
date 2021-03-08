@@ -61,20 +61,24 @@ class Prepare {
     if (fynpoTags) {
       Object.keys(fynpoTags).find(tag => {
         const tagInfo = fynpoTags[tag];
-        const tagPkgs = _.get(tagInfo, "packages");
-        if (tagInfo.enabled === false || !tagPkgs.hasOwnProperty(pkgJson.name)) {
+        if (tagInfo.enabled === false) {
           return undefined;
         }
+        let enabled = _.get(tagInfo, ["packages", pkgJson.name]);
 
-        if (tagPkgs[pkgJson.name]) {
-          pkgJson.publishConfig = Object.assign({}, pkgJson.publishConfig, { tag });
-          return (updated = tag);
-        } else if (pkgJson.hasOwnProperty("publishConfig")) {
-          delete pkgJson.publishConfig;
+        if (enabled === undefined && tagInfo.regex) {
+          enabled = Boolean(tagInfo.regex.find(r => new RegExp(r).exec(pkgJson.name)));
+        }
+
+        if (!enabled) {
+          if (pkgJson.publishConfig) {
+            delete pkgJson.publishConfig.tag;
+          }
           return (updated = "latest");
         }
 
-        return undefined;
+        pkgJson.publishConfig = Object.assign({}, pkgJson.publishConfig, { tag });
+        return (updated = tag);
       });
     }
 
