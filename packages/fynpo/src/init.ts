@@ -1,3 +1,5 @@
+/* eslint-disable consistent-return */
+
 import xsh from "xsh";
 import fs from "fs-extra";
 import Path from "path";

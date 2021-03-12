@@ -82,7 +82,7 @@ export const _searchForFynpo = (cwd = process.cwd()) => {
   } while (++count < 50 && dir !== prevDir);
 
   return { config, dir, lerna, lernaDir };
-}
+};
 
 export const loadConfig = (cwd = process.cwd()) => {
   let fynpoRc = {};
