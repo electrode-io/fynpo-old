@@ -196,10 +196,6 @@ ${data.error.output.stderr}
   }
 
   async exec({ build = true, fynOpts = [], concurrency = 3, skip = [] }) {
-    _.each(this._data.packages, pkg => {
-      this.updatePkgToLocal(pkg);
-    });
-
     if (!this._fyn) {
       this._fyn = require.resolve("fyn");
       const fynPkgJson = require("fyn/package.json");
