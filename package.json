@@ -4,6 +4,7 @@
   "description": "node.js monorepo",
   "main": "index.js",
   "scripts": {},
+  "private": true,
   "repository": {
     "type": "git",
     "url": "https://github.com/electrode-io/fynpo.git"
