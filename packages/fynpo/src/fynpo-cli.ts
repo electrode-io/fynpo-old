@@ -13,11 +13,13 @@ import Commitlint from "./commitlint";
 import makePkgDeps from "./make-pkg-deps";
 import readPackages from "./read-packages";
 import logger from "./logger";
+import * as utils from "./utils";
 import Fs from "fs";
 
 const makeBootstrap = (parsed) => {
-  const cwd = parsed.opts.cwd || process.cwd();
-  return new Bootstrap(makePkgDeps(readPackages(cwd), parsed.opts), parsed.opts);
+  const { dir } = utils.loadConfig(parsed.opts.cwd || process.cwd());
+  const opts = Object.assign({ cwd: process.cwd(), dir }, parsed.opts);
+  return new Bootstrap(makePkgDeps(readPackages(dir), opts, parsed.name), opts);
 };
 
 const execBootstrap = (parsed) => {
@@ -79,9 +81,10 @@ const execPublish = (parsed) => {
 };
 
 const execRunScript = (parsed) => {
-  const opts = Object.assign({ cwd: process.cwd() }, parsed.opts);
+  const { dir } = utils.loadConfig(parsed.opts.cwd || process.cwd());
+  const opts = Object.assign({ cwd: process.cwd(), dir }, parsed.opts);
 
-  return new Run(opts, parsed.args, makePkgDeps(readPackages(opts.cwd), parsed.opts)).exec();
+  return new Run(opts, parsed.args, makePkgDeps(readPackages(dir), opts, parsed.name)).exec();
 };
 
 const execInit = (parsed) => {
