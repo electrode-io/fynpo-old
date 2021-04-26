@@ -70,7 +70,7 @@ Please visit [here](https://github.com/electrode-io/fynpo/blob/master/packages/c
   },
 }
 ```
-**`changeLogMarkers`** - The markers used to list the changed packages and corresponding commit messages in `CHANGELOG.MD`. This will be used by `fynpo prepare` command to read the changed packages and their new verisons from `CHANGELOG.MD` and to update their `package.json`.
+**`changeLogMarkers`** - The markers used to list the changed packages and corresponding commit messages in `CHANGELOG.md`. This will be used by `fynpo prepare` command to read the changed packages and their new verisons from `CHANGELOG.md` and to update their `package.json`.
 
 **`command.bootstrap.npmRunScripts`** - npm scripts to run for each package while bootstrapping them.
 
