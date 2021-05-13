@@ -58,7 +58,7 @@ export default class Publish {
     stderr && logger.error(stderr);
   }
 
-  getLatestTag = () => {
+  getLatestTag() {
     return this._sh(`git tag --points-at HEAD --list fynpo-rel-*`).then((output) => {
       const tagInfo = output.stdout.split("\n").filter((x) => x.trim().length > 0);
       if (tagInfo.length > 0) {
@@ -69,9 +69,9 @@ export default class Publish {
       }
       return;
     });
-  };
+  }
 
-  runLifeCycleScripts = (scripts = []) => {
+  runLifeCycleScripts(scripts = []) {
     return Promise.map(
       scripts,
       (name) => {
@@ -83,9 +83,9 @@ export default class Publish {
     ).then(() => {
       logger.info(`Successfully ran scripts ${scripts.join(",")} in root.`);
     });
-  };
+  }
 
-  getPackagesToPublish = () => {
+  getPackagesToPublish() {
     return Promise.all([
       // this will output file paths with / as separator, even on windows
       // note: it may actually depend on git configuration
@@ -118,9 +118,9 @@ export default class Publish {
         );
       });
     });
-  };
+  }
 
-  publishPackages = () => {
+  publishPackages() {
     const dryRunCmd = this._dryRun ? " --dry-run" : "";
     const distTagCmd = this._distTag ? ` --tag ${this._distTag}` : "";
 
@@ -147,9 +147,9 @@ export default class Publish {
         this._logError("Publish failed:", err);
         process.exit(1);
       });
-  };
+  }
 
-  addReleaseTag = async () => {
+  async addReleaseTag() {
     if (this._dryRun) {
       return;
     }
@@ -194,7 +194,7 @@ export default class Publish {
       this._logError("Creating release tag failed", err);
       process.exit(1);
     }
-  };
+  }
 
   exec() {
     return this.getLatestTag()
