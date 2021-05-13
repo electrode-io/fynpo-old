@@ -1,32 +1,42 @@
 /* eslint-disable consistent-return */
 
 import xsh from "xsh";
-import path from "path";
+import Path from "path";
 import Promise from "bluebird";
 import logger from "./logger";
 import * as utils from "./utils";
+import * as _ from "lodash";
 
 export default class Publish {
   _cwd;
   _distTag;
   _dryRun;
   _push;
-  _packages;
+  _packageInfo;
   _packagesToPublish;
   _rootScripts;
   _fynpoRc;
   _messages;
-  constructor({ cwd, distTag, dryRun, push }, packages = {}) {
+  _tagTmpl: string;
+  constructor({ cwd, distTag, dryRun, push }, pkgInfo = {}) {
     this._distTag = distTag;
     this._dryRun = dryRun;
     this._push = push;
-    this._packages = packages;
+    this._packageInfo = pkgInfo;
 
     const { fynpoRc, dir } = utils.loadConfig(this._cwd);
     this._cwd = dir || cwd;
     this._fynpoRc = fynpoRc || {};
 
     this._rootScripts = utils.getRootScripts(this._cwd);
+
+    const gitTagTmpl = _.get(
+      this._fynpoRc,
+      "command.publish.gitTagTemplate",
+      `fynpo-rel-{YYYY}{MM}{DD}-{COMMIT}`
+    );
+
+    this._tagTmpl = gitTagTmpl;
   }
 
   _sh(command, cwd = this._cwd, silent = true) {
@@ -38,6 +48,14 @@ export default class Publish {
       },
       command
     );
+  }
+
+  _logError(msg, err) {
+    const stdout = _.get(err, "output.stdout", "");
+    const stderr = _.get(err, "output.stderr", "");
+    logger.error(msg, err.stack);
+    stdout && logger.error(stdout);
+    stderr && logger.error(stderr);
   }
 
   getLatestTag = () => {
@@ -68,15 +86,37 @@ export default class Publish {
   };
 
   getPackagesToPublish = () => {
-    return this._sh(`git diff-tree --no-commit-id --name-only -r HEAD`).then((output) => {
-      const packages = output.stdout
-        .split("\n")
-        .filter((x) => x.trim().length > 0 && path.basename(x) === "package.json");
-      const paths = packages.map((p) => path.join(this._cwd, path.dirname(p)));
+    return Promise.all([
+      // this will output file paths with / as separator, even on windows
+      // note: it may actually depend on git configuration
+      this._sh(`git diff-tree --no-commit-id --name-only -r HEAD`),
+      // get the commit message
+      this._sh(`git log -1 --pretty=%B`),
+    ]).then(([changedFiles, commitMsg]) => {
+      if (!commitMsg.stdout.includes("[Publish]")) {
+        return [];
+      }
 
-      return Object.values(this._packages)
-        .filter((pkg: any) => paths.includes(pkg.path))
-        .filter((pkg: any) => !pkg.pkgJson.private);
+      const packageNames = commitMsg.stdout
+        .split("\n")
+        .map((x) => x.trim())
+        .filter((x) => x.length > 0 && x.startsWith(`- `))
+        .map((x) => {
+          const ix2 = x.lastIndexOf("@");
+          return x.substring(2, ix2);
+        });
+
+      const packagePaths = changedFiles.stdout
+        .split("\n")
+        .map((x) => x.trim())
+        .filter((x) => Path.basename(x) === "package.json")
+        .map((x) => Path.dirname(x));
+
+      return Object.values(this._packageInfo.packages).filter((pkg: any) => {
+        return (
+          packagePaths.includes(pkg.path) && !pkg.pkgJson.private && packageNames.includes(pkg.name)
+        );
+      });
     });
   };
 
@@ -89,9 +129,12 @@ export default class Publish {
       (pkg) => {
         const publishCmd = `npm publish${distTagCmd}${dryRunCmd}`;
         logger.info(`===== Running publish for package ${pkg.name} with '${publishCmd}' =====`);
+        logger.info(`===== package dir: ${pkg.path} =====`);
 
-        return this._sh(publishCmd, pkg.path).then(() => {
-          logger.info(`Published package ${pkg.name}@${pkg.version}`);
+        return this._sh(publishCmd, Path.resolve(this._cwd, pkg.path)).then((output) => {
+          logger.info(`===== Published package ${pkg.name}@${pkg.version} =====`);
+          logger.prefix(false).info(output.stdout);
+          logger.prefix(false).info(output.stderr);
           logger.info("-------------------------------------------------");
         });
       },
@@ -99,36 +142,63 @@ export default class Publish {
     )
       .then(() => {
         logger.info(`Successfully published:\n${this._messages.join("\n")}`);
-        return;
       })
       .catch((err) => {
-        logger.error(`Publish failed: ${err}`);
+        this._logError("Publish failed:", err);
         process.exit(1);
       });
   };
 
-  addReleaseTag = () => {
+  addReleaseTag = async () => {
+    if (this._dryRun) {
+      return;
+    }
+
     logger.info(`===== Adding Release Tag =====`);
-    return this._sh(`git log --format="%h" -n 1`).then((output) => {
-      const commitIds = output.stdout.split("\n").filter((x) => x.trim().length > 0);
-      const newTag = `fynpo-rel-${commitIds[0]}`;
 
-      return this._sh(`git tag -a ${newTag} -m "Release Tag"`).then((tagOut) => {
-        logger.info("tag", newTag, "output", tagOut);
-        if (this._dryRun || !this._push) {
-          logger.info(`Release tag ${newTag} created!`);
-          return;
+    try {
+      let commitIds = [];
+
+      if (this._tagTmpl.includes("{COMMIT}")) {
+        const commitOutput = await this._sh(`git log --format="%h" -n 1`);
+        commitIds = commitOutput.stdout.split("\n").filter((x) => x.trim().length > 0);
+      }
+
+      const date = new Date();
+
+      const tokens = {
+        "{YYYY}": () => _.padStart(`${date.getFullYear()}`, 4, "0"),
+        "{MM}": () => _.padStart(`${date.getMonth() + 1}`, 2, "0"),
+        "{DD}": () => _.padStart(`${date.getDate()}`, 2, "0"),
+        "{COMMIT}": () => commitIds[0] || "",
+      };
+
+      const newTag = Object.keys(tokens).reduce((tag, tk) => {
+        if (tag.includes(tk)) {
+          return tag.replace(tk, tokens[tk]());
         }
+        return tag;
+      }, this._tagTmpl);
 
-        logger.info(`Release tag ${newTag} created. Pushing the tag to remote..`);
-        return this._sh(`git push origin ${newTag}`);
-      });
-    });
+      const tagOut = await this._sh(`git tag -a ${newTag} -m "Release Tag"`);
+      logger.info("tag", newTag, "output", tagOut);
+      if (this._dryRun || !this._push) {
+        logger.info(`Release tag ${newTag} created!`);
+        return;
+      }
+
+      logger.info(`Release tag ${newTag} created. Pushing the tag to remote..`);
+
+      await this._sh(`git push origin ${newTag}`);
+    } catch (err) {
+      this._logError("Creating release tag failed", err);
+      process.exit(1);
+    }
   };
 
   exec() {
     return this.getLatestTag()
-      .then(this.getPackagesToPublish)
+      .then(() => this.getPackagesToPublish())
       .then((packagesToPublish) => {
         if (!packagesToPublish.length) {
           logger.warn("No changed packages to publish!");
@@ -142,6 +212,8 @@ export default class Publish {
         //return this.runLifeCycleScripts(["prepare", "prepublishOnly"]);
         return this.publishPackages();
       })
-      .then(this.addReleaseTag);
+      .then(() => {
+        return this.addReleaseTag();
+      });
   }
 }
