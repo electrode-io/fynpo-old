@@ -173,12 +173,15 @@ export default class Publish {
         "{COMMIT}": () => commitIds[0] || "",
       };
 
-      const newTag = Object.keys(tokens).reduce((tag, tk) => {
-        if (tag.includes(tk)) {
-          return tag.replace(tk, tokens[tk]());
+      const newTag = this._tagTmpl.replace(/({[A-Z]+})/g, (_m, token) => {
+        if (tokens[token]) {
+          return tokens[token]();
         }
-        return tag;
-      }, this._tagTmpl);
+        const valid = Object.keys(token).join(", ");
+        throw new Error(
+          `unknown token '${token}' in command.publish.gitTagTemplate - valid tokens are: ${valid}`
+        );
+      });
 
       const tagOut = await this._sh(`git tag -a ${newTag} -m "Release Tag"`);
       logger.info("tag", newTag, "output", tagOut);
