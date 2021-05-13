@@ -39,7 +39,8 @@ export default class Publish {
     this._tagTmpl = gitTagTmpl;
   }
 
-  _sh(command, cwd = this._cwd, silent = true) {
+  _sh(command, cwd = this._cwd, silent = false) {
+    logger.info(`Executing shell command '${command}' in ${cwd}`);
     return xsh.exec(
       {
         silent,
@@ -50,12 +51,14 @@ export default class Publish {
     );
   }
 
-  _logError(msg, err) {
-    const stdout = _.get(err, "output.stdout", "");
-    const stderr = _.get(err, "output.stderr", "");
+  _logError(msg, err, showOutput = false) {
     logger.error(msg, err.stack);
-    stdout && logger.error(stdout);
-    stderr && logger.error(stderr);
+    if (showOutput) {
+      const stdout = _.get(err, "output.stdout", "");
+      const stderr = _.get(err, "output.stderr", "");
+      stdout && logger.error(stdout);
+      stderr && logger.error(stderr);
+    }
   }
 
   getLatestTag() {
@@ -76,7 +79,7 @@ export default class Publish {
       scripts,
       (name) => {
         if (this._rootScripts[name]) {
-          return this._sh(this._rootScripts[name], this._cwd, false);
+          return this._sh(this._rootScripts[name]);
         }
       },
       { concurrency: 1 }
@@ -131,10 +134,8 @@ export default class Publish {
         logger.info(`===== Running publish for package ${pkg.name} with '${publishCmd}' =====`);
         logger.info(`===== package dir: ${pkg.path} =====`);
 
-        return this._sh(publishCmd, Path.resolve(this._cwd, pkg.path)).then((output) => {
+        return this._sh(publishCmd, Path.resolve(this._cwd, pkg.path)).then((_output) => {
           logger.info(`===== Published package ${pkg.name}@${pkg.version} =====`);
-          logger.prefix(false).info(output.stdout);
-          logger.prefix(false).info(output.stderr);
           logger.info("-------------------------------------------------");
         });
       },
@@ -192,7 +193,7 @@ export default class Publish {
 
       logger.info(`Release tag ${newTag} created. Pushing the tag to remote..`);
 
-      await this._sh(`git push origin ${newTag}`);
+      await this._sh(`git push origin ${newTag}`, this._cwd, false);
     } catch (err) {
       this._logError("Creating release tag failed", err);
       process.exit(1);
