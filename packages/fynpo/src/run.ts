@@ -107,39 +107,58 @@ export default class Run {
   }
 
   runScriptsInParallel(packagesToRun) {
-    return Promise.map(packagesToRun, (pkg) => this.runScriptWithStream(pkg));
+    const queue = new PQueue({ concurrency: this._options.concurrency });
+    const errors = [];
+    const results = [];
+    queue.addAll(
+      packagesToRun.map((pkg) => {
+        // cannot run the script here, must return a function that will run the script
+        // else we start running script for all packages at once
+        return () => {
+          // TODO: expose continueOnError option
+          if (!this._options.continueOnError && errors.length > 0) {
+            return;
+          }
+
+          const msg = boxen(
+            `
+Queueing package ${pkg.name} to run script '${this._script}'
+`,
+            { padding: { top: 0, right: 2, left: 2, bottom: 0 } }
+          );
+
+          logger.prefix(false).info(msg);
+          let error: Error;
+          return this.runScriptWithStream(pkg)
+            .then((x) => results.push(x))
+            .catch((err: { pkg: any } & Error) => {
+              error = err;
+              err.pkg = pkg;
+              errors.push(err);
+              results.push(err);
+            })
+            .finally((x) => {
+              const m = `
+${error ? "ERROR - Failed" : "Completed"} run script '${this._script}' for package ${pkg.name}
+`;
+              const msg = boxen(error ? chalk.red(m) : chalk.green(m), {
+                padding: { top: 0, right: 2, left: 2, bottom: 0 },
+              });
+              logger.prefix(false).info(msg);
+              return x;
+            });
+        };
+      })
+    );
+
+    return queue.onIdle().then(() => {
+      return results;
+    });
   }
 
   runScriptsInTopological(packagesToRun) {
-    const runner = this.getRunner();
-
-    const queue = new PQueue({ concurrency: this._options.concurrency });
-    return new Promise((resolve, reject) => {
-      const returnValues = [];
-
-      const queueNextAvailablePackages = () => {
-        const pkgQueue = [];
-
-        packagesToRun.forEach((pkg) => {
-          this.excuteScript(pkg, pkgQueue);
-        });
-
-        pkgQueue.forEach((pkg) => {
-          queue
-            .add(() =>
-              runner(pkg)
-                .then((value) => returnValues.push(value))
-                .then(() => (pkg.executed = true))
-                .then(() => queueNextAvailablePackages())
-            )
-            .catch(reject);
-        });
-      };
-
-      queueNextAvailablePackages();
-
-      return queue.onIdle().then(() => resolve(returnValues));
-    });
+    // TODO: what does topo run mean?
+    return this.runScriptsInParallel(packagesToRun);
   }
 
   exec() {
@@ -177,42 +196,32 @@ export default class Run {
           return this.runScriptsInLexical(packagesToRun);
         }
       })
-      .then((results) => {
-        if (results.some((result) => result.failed)) {
+      .then((results: ({ failed: boolean; exitCode: number } & Error)[]) => {
+        if (Array.isArray(results) && results.some((result) => result.failed)) {
+          logger.error(`ERROR: failure occurred while running script in these packages`);
           // propagate "highest" error code, it's probably the most useful
-          const codes = results.filter((result) => result.failed).map((result) => result.exitCode);
+          const failures = results.filter((result) => result.failed);
+          failures.forEach((result) => {
+            const name = _.get(result, "pkg.name");
+            logger.error(`  - ${name} - exitCode ${result.exitCode}`);
+          });
+          const codes = failures.map((error) => error.exitCode);
           const exitCode = Math.max(...codes, 1);
-
-          logger.error(`Received non-zero exit code ${exitCode} during execution`);
           process.exitCode = exitCode;
+        } else {
+          const duration = (timer() / 1000).toFixed(1);
+          const messages = packagesToRun.map((pkg: any) => ` - ${pkg.name}`);
+          logger.info(
+            `
+Finished run npm script '${this._script}' in ${count} ${pkgMsg} in ${duration}s:
+${messages.join("\n")}
+`
+          );
         }
       })
-      .then(() => {
-        const duration = (timer() / 1000).toFixed(1);
-        const messages = packagesToRun.map((pkg: any) => ` - ${pkg.name}`);
-        logger.info(
-          `Ran npm script ${this._script} in ${count} ${pkgMsg} in ${duration}s:\n${messages.join(
-            "\n"
-          )}`
-        );
-      })
       .catch((err) => {
-        const tag = _.get(err, "runOpts.stderrOpts.tag", "");
-        const msg = boxen(
-          `
-failed running npm script '${this._script}'
-`,
-          { padding: { top: 0, right: 2, left: 2, bottom: 0 } }
-        );
-        msg.split("\n").forEach((l) => {
-          const l2 = chalk.red(`ERROR ${l} ERROR`);
-          logger.prefix(false).error(`${tag} ${l2}`);
-        });
-
-        process.exitCode = err.exitCode;
-      })
-      .finally(() => {
-        logger.info("RUN COMPLETED");
+        logger.error(`ERROR - caught exception running scripts`, err);
+        process.exit(1);
       });
   }
 }
