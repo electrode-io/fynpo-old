@@ -114,12 +114,9 @@ export default class Run {
             return;
           }
 
-          const msg = boxen(
-            `
-Queueing package ${pkg.name} to run script '${this._script}'
-`,
-            { padding: { top: 0, right: 2, left: 2, bottom: 0 } }
-          );
+          const msg = boxen(`Queueing package ${pkg.name} to run script '${this._script}'`, {
+            padding: { top: 0, right: 2, left: 2, bottom: 0 },
+          });
 
           logger.prefix(false).info(msg);
           let error: Error;
@@ -142,10 +139,10 @@ Queueing package ${pkg.name} to run script '${this._script}'
             .finally((result) => {
               const duration = (timer() / 1000).toFixed(1);
               const m1 = error ? "ERROR - Failed" : "Completed";
-              const m2 = `
-${m1} run script '${this._script}' for package ${pkg.name}.  Time: ${duration}s
-${this._options.stream ? "" : "Output follows:"}`;
-              const msg = boxen(error ? chalk.red(m2) : chalk.green(m2), {
+              const m2 = `${m1} run script '${this._script}' for package ${pkg.name}.  Time: ${duration}s`;
+              const m3 = `${this._options.stream ? "" : "Output follows:"}`;
+              const m4 = `${m2}\n${m3}`;
+              const msg = boxen(error ? chalk.red(m4) : chalk.green(m4), {
                 padding: { top: 0, right: 2, left: 2, bottom: 0 },
               });
               logger.prefix(false).info(msg);
@@ -154,8 +151,12 @@ ${this._options.stream ? "" : "Output follows:"}`;
                 if (output.stderr) {
                   logger.prefix(false).error(output.stderr);
                 }
-                logger.prefix(false).info(`---------------------------------------------------`);
-                logger.prefix(false).info(`===================================================`);
+                const m5 = `End of output\n${m2}`;
+                logger.prefix(false).info(
+                  boxen(error ? chalk.red(m5) : chalk.green(m5), {
+                    padding: { top: 0, right: 2, left: 2, bottom: 0 },
+                  })
+                );
               }
               return result;
             });
@@ -224,8 +225,7 @@ ${this._options.stream ? "" : "Output follows:"}`;
           const duration = (timer() / 1000).toFixed(1);
           const messages = packagesToRun.map((pkg: any) => ` - ${pkg.name}`);
           logger.info(
-            `
-Finished run npm script '${this._script}' in ${count} ${pkgMsg} in ${duration}s:
+            `Finished run npm script '${this._script}' in ${count} ${pkgMsg} in ${duration}s:
 ${messages.join("\n")}
 `
           );
