@@ -89,13 +89,7 @@ export default class Run {
   }
 
   runScript(pkg) {
-    const timer = utils.timer();
-    return npmRunScript(this._script, this.getOpts(pkg)).then((result) => {
-      const duration = (timer() / 1000).toFixed(1);
-      logger.info(result.stdout);
-      logger.info(`Ran npm script ${this._script} in ${pkg.name} in ${duration}s:"`);
-      return result;
-    });
+    return npmRunScript(this._script, this.getOpts(pkg));
   }
 
   runScriptWithStream(pkg) {
@@ -129,23 +123,41 @@ Queueing package ${pkg.name} to run script '${this._script}'
 
           logger.prefix(false).info(msg);
           let error: Error;
-          return this.runScriptWithStream(pkg)
-            .then((x) => results.push(x))
+          let output;
+          const timer = utils.timer();
+          return this.getRunner()(pkg)
+            .then((x) => {
+              results.push(x);
+              output = x;
+              return x;
+            })
             .catch((err: { pkg: any } & Error) => {
               error = err;
               err.pkg = pkg;
               errors.push(err);
               results.push(err);
+              output = err;
+              return err;
             })
-            .finally((x) => {
-              const m = `
-${error ? "ERROR - Failed" : "Completed"} run script '${this._script}' for package ${pkg.name}
-`;
-              const msg = boxen(error ? chalk.red(m) : chalk.green(m), {
+            .finally((result) => {
+              const duration = (timer() / 1000).toFixed(1);
+              const m1 = error ? "ERROR - Failed" : "Completed";
+              const m2 = `
+${m1} run script '${this._script}' for package ${pkg.name}.  Time: ${duration}s
+${this._options.stream ? "" : "Output follows:"}`;
+              const msg = boxen(error ? chalk.red(m2) : chalk.green(m2), {
                 padding: { top: 0, right: 2, left: 2, bottom: 0 },
               });
               logger.prefix(false).info(msg);
-              return x;
+              if (!this._options.stream) {
+                logger.prefix(false).info(output.stdout);
+                if (output.stderr) {
+                  logger.prefix(false).error(output.stderr);
+                }
+                logger.prefix(false).info(`---------------------------------------------------`);
+                logger.prefix(false).info(`===================================================`);
+              }
+              return result;
             });
         };
       })
