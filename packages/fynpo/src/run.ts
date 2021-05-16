@@ -206,11 +206,11 @@ export default class Run {
       }
 
       if (Array.isArray(results) && results.some((result) => result.failed)) {
-        logger.error(`ERROR: failure occurred while running script in these packages`);
+        logger.error(chalk.red(`ERROR: failure occurred while running script in these packages`));
         const failures = results.filter((result) => result.failed);
         failures.forEach((result) => {
           const name = _.get(result, "pkg.name");
-          logger.error(`  - ${name} - exitCode ${result.exitCode}`);
+          logger.error(chalk.red(`  - ${name} - exitCode ${result.exitCode}`));
         });
         // propagate "highest" error code, it's probably the most useful
         const codes = failures.map((error) => error.exitCode);
