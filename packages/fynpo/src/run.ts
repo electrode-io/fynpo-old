@@ -137,8 +137,8 @@ export default class Run {
             const duration = (timer() / 1000).toFixed(1);
             const m1 = error ? "ERROR - Failed" : "Completed";
             const m2 = `${m1} run script '${this._script}' for package ${pkg.name}.  Time: ${duration}s`;
-            const m3 = `${this._options.stream ? "" : "Output follows:"}`;
-            const m4 = `${m2}\n${m3}`;
+            const m3 = `${this._options.stream ? "" : "\nOutput follows:"}`;
+            const m4 = `${m2}${m3}`;
             const msg = boxen(error ? chalk.red(m4) : chalk.green(m4), {
               padding: { top: 0, right: 2, left: 2, bottom: 0 },
             });
