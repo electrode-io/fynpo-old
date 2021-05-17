@@ -55,7 +55,7 @@ export default class Run {
     };
   }
 
-  excuteScript(pkg, pkgQueue) {
+  executeScript(pkg, pkgQueue) {
     if (pkg.ignore) {
       return true;
     }
@@ -69,7 +69,7 @@ export default class Run {
       const depPkg = this._packages[depName] || {};
       const scriptToRun = _.get(depPkg, ["pkgJson", "scripts", this._script]);
       const circulars = this._circularMap[depName] || [];
-      if (scriptToRun && !circulars.includes(pkg.name) && !this.excuteScript(depPkg, pkgQueue)) {
+      if (scriptToRun && !circulars.includes(pkg.name) && !this.executeScript(depPkg, pkgQueue)) {
         pending++;
       }
     });
