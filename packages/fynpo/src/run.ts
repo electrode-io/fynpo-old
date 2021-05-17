@@ -100,6 +100,39 @@ export default class Run {
     return Promise.map(packagesToRun, this.getRunner(), { concurrency: this._options.concurrency });
   }
 
+  _logQueueMsg(pkg) {
+    const msg = boxen(`Queueing package ${pkg.name} to run script '${this._script}'`, {
+      padding: { top: 0, right: 2, left: 2, bottom: 0 },
+    });
+
+    logger.prefix(false).info(msg);
+  }
+
+  _logRunResult({ timer, error, output, pkg }) {
+    const duration = (timer() / 1000).toFixed(1);
+    const m1 = error ? "ERROR - Failed" : "Completed";
+    const m2 = `${m1} run script '${this._script}' for package ${pkg.name}.  Time: ${duration}s`;
+    const m3 = `${this._options.stream ? "" : "\nOutput follows:"}`;
+    const m4 = `${m2}${m3}`;
+    const msg = boxen(error ? chalk.red(m4) : chalk.green(m4), {
+      padding: { top: 0, right: 2, left: 2, bottom: 0 },
+    });
+
+    logger.prefix(false).info(msg);
+    if (!this._options.stream) {
+      logger.prefix(false).info(output.stdout);
+      if (output.stderr) {
+        logger.prefix(false).error(output.stderr);
+      }
+      const m5 = `End of output\n${m2}`;
+      logger.prefix(false).info(
+        boxen(error ? chalk.red(m5) : chalk.green(m5), {
+          padding: { top: 0, right: 2, left: 2, bottom: 0 },
+        })
+      );
+    }
+  }
+
   async runScriptsInParallel(packagesToRun) {
     const queue = new PQueue({ concurrency: this._options.concurrency });
     const errors = [];
@@ -114,48 +147,24 @@ export default class Run {
             return;
           }
 
-          const msg = boxen(`Queueing package ${pkg.name} to run script '${this._script}'`, {
-            padding: { top: 0, right: 2, left: 2, bottom: 0 },
-          });
+          this._logQueueMsg(pkg);
 
-          logger.prefix(false).info(msg);
-          let error: Error;
-          let output;
-          const timer = utils.timer();
+          const runData: any = {
+            pkg,
+            timer: utils.timer(),
+          };
 
           try {
-            const x = await this.getRunner()(pkg);
-            results.push(x);
-            output = x;
+            runData.output = await this.getRunner()(pkg);
+            results.push(runData.output);
           } catch (err: any) {
-            error = err;
             err.pkg = pkg;
             errors.push(err);
             results.push(err);
-            output = err;
+            runData.error = err;
+            runData.output = err;
           } finally {
-            const duration = (timer() / 1000).toFixed(1);
-            const m1 = error ? "ERROR - Failed" : "Completed";
-            const m2 = `${m1} run script '${this._script}' for package ${pkg.name}.  Time: ${duration}s`;
-            const m3 = `${this._options.stream ? "" : "\nOutput follows:"}`;
-            const m4 = `${m2}${m3}`;
-            const msg = boxen(error ? chalk.red(m4) : chalk.green(m4), {
-              padding: { top: 0, right: 2, left: 2, bottom: 0 },
-            });
-
-            logger.prefix(false).info(msg);
-            if (!this._options.stream) {
-              logger.prefix(false).info(output.stdout);
-              if (output.stderr) {
-                logger.prefix(false).error(output.stderr);
-              }
-              const m5 = `End of output\n${m2}`;
-              logger.prefix(false).info(
-                boxen(error ? chalk.red(m5) : chalk.green(m5), {
-                  padding: { top: 0, right: 2, left: 2, bottom: 0 },
-                })
-              );
-            }
+            this._logRunResult(runData);
           }
         };
       })
