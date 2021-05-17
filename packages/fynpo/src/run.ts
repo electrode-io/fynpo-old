@@ -19,6 +19,7 @@ export default class Run {
   _args;
   _npmClient;
   _circularMap;
+  _concurrency: number;
 
   constructor(opts, args, data) {
     this._script = args.script;
@@ -28,6 +29,11 @@ export default class Run {
     this._args = this._options["--"] || [];
     this._npmClient = "npm";
     this._circularMap = {};
+    // enforce concurrency to be an integer between 1 and 10, else default to 3
+    this._concurrency =
+      Number.isInteger(opts.concurrency) && opts.concurrency >= 1 && opts.concurrency <= 10
+        ? opts.concurrency
+        : 3;
     data.circulars.reduce((mapping, locks) => {
       locks.forEach((name) => (mapping[name] = locks));
       return mapping;
@@ -97,7 +103,7 @@ export default class Run {
   }
 
   runScriptsInLexical(packagesToRun) {
-    return Promise.map(packagesToRun, this.getRunner(), { concurrency: this._options.concurrency });
+    return Promise.map(packagesToRun, this.getRunner(), { concurrency: this._concurrency });
   }
 
   _logQueueMsg(pkg) {
@@ -134,42 +140,43 @@ export default class Run {
   }
 
   async runScriptsInParallel(packagesToRun) {
-    const queue = new PQueue({ concurrency: this._options.concurrency });
     const errors = [];
     const results = [];
-    queue.addAll(
-      packagesToRun.map((pkg) => {
-        // cannot run the script here, must return a function that will run the script
-        // else we start running script for all packages at once
-        return async () => {
-          // TODO: expose continueOnError option
-          if (!this._options.continueOnError && errors.length > 0) {
-            return;
-          }
 
-          this._logQueueMsg(pkg);
+    const queueTasks = packagesToRun.map((pkg) => {
+      // cannot run the script here, must return a function that will run the script
+      // else we start running script for all packages at once
+      return async () => {
+        // TODO: expose continueOnError option
+        if (!this._options.continueOnError && errors.length > 0) {
+          return;
+        }
 
-          const runData: any = {
-            pkg,
-            timer: utils.timer(),
-          };
+        this._logQueueMsg(pkg);
 
-          try {
-            runData.output = await this.getRunner()(pkg);
-            results.push(runData.output);
-          } catch (err: any) {
-            err.pkg = pkg;
-            errors.push(err);
-            results.push(err);
-            runData.error = err;
-            runData.output = err;
-          } finally {
-            this._logRunResult(runData);
-          }
+        const runData: any = {
+          pkg,
+          timer: utils.timer(),
         };
-      })
-    );
 
+        try {
+          runData.output = await this.getRunner()(pkg);
+          results.push(runData.output);
+        } catch (err: any) {
+          err.pkg = pkg;
+          errors.push(err);
+          results.push(err);
+          runData.error = err;
+          runData.output = err;
+        } finally {
+          this._logRunResult(runData);
+        }
+      };
+    });
+
+    const queue = new PQueue({ concurrency: this._concurrency });
+
+    queue.addAll(queueTasks);
     await queue.onIdle();
     return results;
   }
